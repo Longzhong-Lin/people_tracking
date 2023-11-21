@@ -123,6 +123,7 @@ rospy.init_node('people_tracking', anonymous=True)
 rate = rospy.Rate(2000)
 for camera_name in ['CAM_C', 'CAM_D']:
     pub_dict[camera_name] = rospy.Publisher('/img/' + str(camera_name)+"/image_raw", Image, queue_size=0)
+pub_dict['TRACK'] = rospy.Publisher('/img/' + "TRACK/result", Image, queue_size=0)
 
 def ros_publish_img(img_ori, cam_name, timestamp, dt_time, bridge):
     if dt_time == -1:
@@ -323,25 +324,36 @@ def loop_and_track(
 
         # 深度估计
         disp, colored_disp = depth_estimator.compute_disparity(
-            left_img_rect, right_img_rect, return_color=develop
+            left_img_rect, right_img_rect, return_color=False
         )
         if target_bbox is not None:
             target_point = depth_estimator.generate_target_point(disp, target_bbox)
             ros_publish_goal(target_point[0], target_point[1])
             if develop:
-                canvas = np.zeros((200, 400, 3), dtype="uint8")
-                cv2.putText(canvas, f"({target_point[0]:.2f}, {target_point[1]:.2f})", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                cv2.imshow('target', canvas)
+                img_final = cv2.putText(
+                    img_final, f"target ({target_point[0]:.2f}, {target_point[1]:.2f})",
+                    (20, 75), cv2.FONT_HERSHEY_PLAIN, 2, [0, 0, 255], 2
+                )
+                img_final = cv2.putText(
+                    img_final, f"distance: {math.sqrt(target_point[0]**2 + target_point[1]**2):.2f} m",
+                    (20, 100), cv2.FONT_HERSHEY_PLAIN, 2, [0, 0, 255], 2
+                )
             x1,y1,x2,y2 = target_bbox
             if colored_disp is not None:
                 colored_disp = colored_disp[y1:y2, x1:x2]
 
-        # 可视化
+        # 帧率
         end = time.time()
         img_final = cv2.putText(
             img_final, "fps {:.02f}".format(1 / (end - start)),
             (10, 20), cv2.FONT_HERSHEY_PLAIN, 2, [0, 128, 0], 2
         )
+
+        # 结果记录
+        ros_publish_img(img_final, 'TRACK', timestamp, dt_time, bridge)
+
+        # 可视化
+        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
         cv2.imshow(WINDOW_NAME, img_final)
         if colored_disp is not None:
             cv2.imshow('disp', colored_disp)
