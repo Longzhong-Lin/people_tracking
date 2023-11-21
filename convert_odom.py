@@ -3,6 +3,7 @@
 import rospy
 import numpy as np
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 class VelocityEstimator:
@@ -10,9 +11,19 @@ class VelocityEstimator:
         rospy.init_node('velocity_estimator', anonymous=True)
         self.odom_pub = rospy.Publisher('/odom', Odometry, queue_size=10)
         self.odom_sub = rospy.Subscriber('/Odometry', Odometry, self.odom_callback)
+        self.cmd_vel_sub = rospy.Subscriber('/robot_3/cmd_vel', Twist, self.cmd_vel_callback)
         self.last_time = None
         self.last_position = None
         self.last_orientation = None
+        self.cmd_v = 0.0
+        self.cmd_w = 0.0
+        self.cmd_time = None
+    
+    def cmd_vel_callback(self, msg):
+        # Extract linear and angular velocities from cmd_vel message
+        self.cmd_v = msg.linear.x
+        self.cmd_w = msg.angular.z
+        self.cmd_time = rospy.Time.now().to_sec()
 
     def odom_callback(self, msg):
         # Extract current position and orientation
@@ -43,12 +54,17 @@ class VelocityEstimator:
 
             odom_msg.pose = msg.pose
 
-            odom_msg.twist.twist.linear.x = linear_velocity_xy
+            if self.cmd_time is not None and 0 < (rospy.Time.now().to_sec() - self.cmd_time) < 0.2:
+                odom_msg.twist.twist.linear.x = self.cmd_v
+                odom_msg.twist.twist.angular.z = self.cmd_w
+            else:
+                odom_msg.twist.twist.linear.x = 0
+                odom_msg.twist.twist.angular.z = 0
+            
             odom_msg.twist.twist.linear.y = 0
             odom_msg.twist.twist.linear.z = 0
             odom_msg.twist.twist.angular.x = 0
             odom_msg.twist.twist.angular.y = 0
-            odom_msg.twist.twist.angular.z = angular_velocity_z
 
             self.odom_pub.publish(odom_msg)
 
