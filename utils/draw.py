@@ -19,7 +19,7 @@ def control_publisher(vel,angle):
 
 
 def draw_boxes(img, bbox, identities, Id, history, develop):#img: 视频帧，bbox: 所有的选框坐标构成的数组，identities: 系统识别的ID， Id: 用户选择的id    
-    
+    target_bbox = None
     count=0
     v=0
     r=0
@@ -43,6 +43,8 @@ def draw_boxes(img, bbox, identities, Id, history, develop):#img: 视频帧，bb
             
             color=[255,128,128]
             if Id!=0:
+                target_bbox = (x1,y1,x2,y2)
+
                 center=((x1+x2)//2,(y1+y2)//2)
                 
                 history.add(center[0])## 只记录X位置到历史中
@@ -111,4 +113,4 @@ def draw_boxes(img, bbox, identities, Id, history, develop):#img: 视频帧，bb
         cv2.putText(img,"{:.02f} rad/s".format(r),(0,300), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 3)    
         #cv2.putText(img,"{:.02f} m/s".format(v/1000),(0,250), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 3)
         #cv2.putText(img,"{:.02f} rad/s".format(r/1000),(0,300), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 3)
-    return img
+    return img, target_bbox

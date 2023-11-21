@@ -116,14 +116,14 @@ class Tracker():
                     box_publisher(bbox_xyxy, identities, self.Id)
                     
                     #ori_im = draw_boxes(ori_im, bbox_xyxy, identities)
-                    ori_im = draw_boxes(img, bbox_xyxy, identities, self.Id,self.his, develop)
+                    ori_im, target_bbox = draw_boxes(img, bbox_xyxy, identities, self.Id,self.his, develop)
                 else:
-                    ori_im = draw_boxes(img, [], None, self.Id,self.his, develop)
+                    ori_im, target_bbox = draw_boxes(img, [], None, self.Id,self.his, develop)
             else:#no object
                 #elif self.Id !=0:
-                ori_im = draw_boxes(img, [], None, self.Id,self.his, develop)
+                ori_im, target_bbox = draw_boxes(img, [], None, self.Id,self.his, develop)
         else:#no object
             #elif self.Id !=0:
-            ori_im = draw_boxes(img, [], None, self.Id,self.his, develop)
+            ori_im, target_bbox = draw_boxes(img, [], None, self.Id,self.his, develop)
 
-        return ori_im
+        return ori_im, target_bbox

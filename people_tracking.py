@@ -11,6 +11,7 @@ import threading
 import numpy as np
 import depthai as dai
 from yolo.tracking import Tracker
+from unimatch.stereo_trt import Depth_Estimator
 from std_msgs.msg import Header
 from sensor_msgs.msg import Image
 from utils.parser import get_config
@@ -234,7 +235,12 @@ else:
 def clamp(num, v0, v1):
     return max(v0, min(num, v1))
 
-def loop_and_track(device, tracker, bridge):
+def loop_and_track(
+    device,
+    tracker: Tracker,
+    depth_estimator: Depth_Estimator,
+    bridge
+):
     global cam_list
     strID = ""
 
@@ -283,7 +289,21 @@ def loop_and_track(device, tracker, bridge):
         right_img_rect = cv2.remap(right_img, mapx_R, mapy_R, cv2.INTER_CUBIC)
         
         # 检测跟踪
-        img_final = tracker.run(left_img_rect, develop)
+        img_final, target_bbox = tracker.run(left_img_rect, develop)
+
+        # 深度估计
+        disp, colored_disp = depth_estimator.compute_disparity(
+            left_img_rect, right_img_rect, return_color=develop
+        )
+        if target_bbox is not None:
+            target_point = depth_estimator.generate_target_point(disp, target_bbox)
+            if develop:
+                canvas = np.zeros((200, 400, 3), dtype="uint8")
+                cv2.putText(canvas, f"({target_point[0]:.2f}, {target_point[1]:.2f})", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                cv2.imshow('target', canvas)
+            x1,y1,x2,y2 = target_bbox
+            if colored_disp is not None:
+                colored_disp = colored_disp[y1:y2, x1:x2]
 
         # 可视化
         end = time.time()
@@ -292,9 +312,10 @@ def loop_and_track(device, tracker, bridge):
             (10, 20), cv2.FONT_HERSHEY_PLAIN, 2, [0, 128, 0], 2
         )
         cv2.imshow(WINDOW_NAME, img_final)
-        key = cv2.waitKey(10)
+        if colored_disp is not None:
+            cv2.imshow('disp', colored_disp)
         
-        # print(key) ?
+        key = cv2.waitKey(1)
         if key == -1:
             continue
         elif key == 27:  # ESC key: quit program
@@ -388,8 +409,14 @@ def main():
 
         tracker = Tracker(det_cfg, track_cfg)
 
+        depth_estimator = Depth_Estimator(
+            engine_path='/home/yjy/people_tracking_ws/src/unimatch/models/gmstereo-scale1-sceneflow-124a438f_1x3x480x640_sim.trt',
+            input_height=480,
+            input_width=640,
+        )
+
         print('start loop track')
-        loop_and_track(device, tracker, bridge)
+        loop_and_track(device, tracker, depth_estimator, bridge)
 
         print('close')
 
