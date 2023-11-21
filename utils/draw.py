@@ -4,7 +4,7 @@ import rospy
 from geometry_msgs.msg import Twist
 
 
-pub_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+# pub_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
 
 maxr=1.2 #最大角速度 单位 rad/s 
 maxv=0.8 #最大线速度,单位 m/s
@@ -14,7 +14,7 @@ def control_publisher(vel,angle):
     twist = Twist()
     twist.linear.x = vel*1
     twist.angular.z = angle*1
-    pub_vel.publish(twist)
+    # pub_vel.publish(twist)
 
 
 
@@ -25,7 +25,7 @@ def draw_boxes(img, bbox, identities, Id, history, develop):#img: 视频帧，bb
     r=0
     if Id==0:#未选择任何目标，停止
         if develop:
-            cv2.putText(img,"Stop",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,0,255], 3)
+            # cv2.putText(img,"Stop",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,0,255], 3)
             cv2.putText(img,"Enter the object ID:",(20,125), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 2)
         v=0
         r=0
@@ -59,16 +59,16 @@ def draw_boxes(img, bbox, identities, Id, history, develop):#img: 视频帧，bb
                     r=rad
                     control_publisher(v,r)
                     color=[0,0,255]
-                    if develop:
-                        cv2.putText(img,"Too Close!",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,0,255], 3)
+                    # if develop:
+                    #     cv2.putText(img,"Too Close!",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,0,255], 3)
                 elif top<0.15:#too close
                     
                     v=0
                     r=rad
                     control_publisher(v,r)
                     color=[0,0,255]
-                    if develop:
-                        cv2.putText(img,"Too Close!",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,0,255], 3)
+                    # if develop:
+                    #     cv2.putText(img,"Too Close!",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,0,255], 3)
                     
                 elif top >0.3:#far
                     
@@ -76,16 +76,16 @@ def draw_boxes(img, bbox, identities, Id, history, develop):#img: 视频帧，bb
                     r=rad
                     control_publisher(v,r)
                     color=[0,255,0]
-                    if develop:
-                        cv2.putText(img,"Far",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,128,0], 3)
+                    # if develop:
+                    #     cv2.putText(img,"Far",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,128,0], 3)
                     
                 else:
                     v=(top-0.15)/0.15*maxv
                     r=rad
                     control_publisher(v,r)
                     color=[0,128,255]
-                    if develop:
-                        cv2.putText(img,"Close",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,128,255], 3)
+                    # if develop:
+                    #     cv2.putText(img,"Close",(20,100), cv2.FONT_HERSHEY_PLAIN, 2, [0,128,255], 3)
                       
                 if develop:
                     cv2.putText(img,"Selected ID {:}".format(Id),(20,125), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 2)
@@ -109,8 +109,9 @@ def draw_boxes(img, bbox, identities, Id, history, develop):#img: 视频帧，bb
             #history.add(None)
         
     if develop:
-        cv2.putText(img,"{:.02f} m/s".format(v),(0,250), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 3)
-        cv2.putText(img,"{:.02f} rad/s".format(r),(0,300), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 3)    
+        pass
+        # cv2.putText(img,"{:.02f} m/s".format(v),(0,250), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 3)
+        # cv2.putText(img,"{:.02f} rad/s".format(r),(0,300), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 3)    
         #cv2.putText(img,"{:.02f} m/s".format(v/1000),(0,250), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 3)
         #cv2.putText(img,"{:.02f} rad/s".format(r/1000),(0,300), cv2.FONT_HERSHEY_PLAIN, 2, [255,0,0], 3)
     return img, target_bbox
