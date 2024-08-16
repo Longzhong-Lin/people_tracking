@@ -68,7 +68,7 @@ class CvBridge():
         img_msg.step = len(img_msg.data) // img_msg.height
         return img_msg
 
-FPS = 16
+FPS = 10
 
 cam_list = {
     # "CAM_A": {"color": True, "res": "1200"},
@@ -118,6 +118,27 @@ rospy.init_node('people_tracking', anonymous=True)
 rate = rospy.Rate(2000)
 for camera_name in ['CAM_C', 'CAM_D']:
     pub_dict[camera_name] = rospy.Publisher('/img/' + str(camera_name)+"/image_raw", Image, queue_size=0)
+
+def ros_publish_img(img_ori, cam_name, timestamp, dt_time, bridge):
+    if dt_time == -1:
+        time_now = rospy.Time.now().to_sec()  # 当前ros时间
+        cam_time = timeDeltaToS(timestamp)  # 当前相机时间
+        dt_time = time_now - cam_time  # 计算出当前相机时间加上dt为当前ros时间（相机和IMU哪个先来就对齐哪个）
+        cam_time = time_now
+    else:
+        cam_time = timeDeltaToS(timestamp)
+        cam_time += dt_time  # 加速度时间加上dt变为ros时间
+
+    img = bridge.cv2_to_imgmsg(img_ori, encoding="bgr8")
+    img.header = Header()
+    img.header.stamp.secs = int(cam_time)
+    img.header.stamp.nsecs = int(
+        (cam_time - int(cam_time)) * 1000 * 1000 * 1000
+    )
+    if dt_time != -1:
+        pub_dict[cam_name].publish(img)
+
+    return dt_time
 
 def create_pipeline():
     pipeline = dai.Pipeline()
@@ -223,86 +244,54 @@ def loop_and_track(device, tracker, bridge):
         output_queues[cam_name] = device.getOutputQueue(
             name=cam_name, maxSize=4, blocking=False,
         )
-    dt_time = -1
+    CAM_LEFT = "CAM_D"
+    CAM_RIGHT = "CAM_C"
+
+    # 读取矫正参数
+    rectify_map_file = "./rectify_map.npz"
+    rectify_map = np.load(rectify_map_file)
+    mapx_L = rectify_map['mapx_L']
+    mapy_L = rectify_map['mapy_L']
+    mapx_R = rectify_map['mapx_R']
+    mapy_R = rectify_map['mapy_R']
+
     # 循环读取视频流
+    dt_time = -1
     while (not device.isClosed()) and (not rospy.is_shutdown()):
-        packet = output_queues["CAM_C"].tryGet()
+        start = time.time()
+
+        # left image
+        packet = output_queues[CAM_LEFT].tryGet()
         if packet is not None:
             # 输出视频帧的时间戳
             timestamp = packet.getTimestampDevice()
             img_cv = packet.getCvFrame()
-            img_ori = cv2.flip(img_cv, 0)
+            left_img = cv2.flip(img_cv, 0)
+            dt_time = ros_publish_img(left_img, CAM_LEFT, timestamp, dt_time, bridge)
 
-            if dt_time == -1:
-                    time_now = rospy.Time.now().to_sec()  # 当前ros时间
-                    cam_time = timeDeltaToS(timestamp)  # 当前相机时间
-                    dt_time = time_now - cam_time  # 计算出当前相机时间加上dt为当前ros时间（相机和IMU哪个先来就对齐哪个）
-                    cam_time = time_now
-            else:
-                cam_time = timeDeltaToS(timestamp)
-                cam_time += dt_time  # 加速度时间加上dt变为ros时间
-
-            img = bridge.cv2_to_imgmsg(img_ori, encoding="bgr8")
-            img.header = Header()
-            img.header.stamp.secs = int(cam_time)
-            img.header.stamp.nsecs = int(
-                (
-                        cam_time - int(cam_time)
-                ) * 1000 * 1000 * 1000
-            )
-            if dt_time != -1:
-                pub_dict["CAM_C"].publish(img)
-            
-            if dt_time == -1:
-                time_now = rospy.Time.now().to_sec()  # 当前ros时间
-                cam_time = timeDeltaToS(timestamp)  # 当前相机时间
-                dt_time = time_now - cam_time  # 计算出当前相机时间加上dt为当前ros时间（相机和IMU哪个先来就对齐哪个）
-                cam_time = time_now
-            else:
-                cam_time = timeDeltaToS(timestamp)
-                cam_time += dt_time  # 加速度时间加上dt变为ros时间
-            
-            start = time.time()
-            img_final = tracker.run(img_ori, develop)
-            end = time.time()
-            
-            if develop:
-                # img_final = cv2.putText(img_final, strID, (20, 150), cv2.FONT_HERSHEY_PLAIN, 2, [255, 0, 0], 2)
-                img_final = cv2.putText(img_final, "fps {:.02f}".format(1 / (end - start)), (10, 20),
-                                        cv2.FONT_HERSHEY_PLAIN, 2, [0, 128, 0], 2)
-                cv2.imshow(WINDOW_NAME, img_final)
-                cv2.waitKey(1)
-                #key = cv2.waitKey(1)
-                #if key == 27:
-                #    break
-        packet = output_queues["CAM_D"].tryGet()
+        # right image
+        packet = output_queues[CAM_RIGHT].tryGet()
         if packet is not None:
             # 输出视频帧的时间戳
             timestamp = packet.getTimestampDevice()
             img_cv = packet.getCvFrame()
-            img_ori = cv2.flip(img_cv, 0)
-            
-            if dt_time == -1:
-                time_now = rospy.Time.now().to_sec()  # 当前ros时间
-                cam_time = timeDeltaToS(timestamp)  # 当前相机时间
-                dt_time = time_now - cam_time  # 计算出当前相机时间加上dt为当前ros时间（相机和IMU哪个先来就对齐哪个）
-                cam_time = time_now
-            else:
-                cam_time = timeDeltaToS(timestamp)
-                cam_time += dt_time  # 加速度时间加上dt变为ros时间
+            right_img = cv2.flip(img_cv, 0)
+            dt_time = ros_publish_img(right_img, CAM_RIGHT, timestamp, dt_time, bridge)
 
-            img = bridge.cv2_to_imgmsg(img_ori, encoding="bgr8")
-            img.header = Header()
-            img.header.stamp.secs = int(cam_time)
-            img.header.stamp.nsecs = int(
-                (
-                        cam_time - int(cam_time)
-                ) * 1000 * 1000 * 1000
-            )
-            if dt_time != -1:
-                pub_dict["CAM_D"].publish(img)
+        # 极线矫正
+        left_img_rect = cv2.remap(left_img, mapx_L, mapy_L, cv2.INTER_CUBIC)
+        right_img_rect = cv2.remap(right_img, mapx_R, mapy_R, cv2.INTER_CUBIC)
+        
+        # 检测跟踪
+        img_final = tracker.run(left_img_rect, develop)
 
-
+        # 可视化
+        end = time.time()
+        img_final = cv2.putText(
+            img_final, "fps {:.02f}".format(1 / (end - start)),
+            (10, 20), cv2.FONT_HERSHEY_PLAIN, 2, [0, 128, 0], 2
+        )
+        cv2.imshow(WINDOW_NAME, img_final)
         key = cv2.waitKey(10)
         
         # print(key) ?
