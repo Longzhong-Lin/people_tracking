@@ -74,7 +74,7 @@ class Depth_Estimator():
         Z = depth
 
         BEV_X = Z
-        BEV_Y = X
+        BEV_Y = -X
         target_point = (BEV_X, BEV_Y)
 
         return target_point

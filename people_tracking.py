@@ -4,8 +4,10 @@ for p in PATH_LIST:
     if p not in sys.path:
         sys.path.append(p)
 import argparse
+import tf
 import cv2
 import time
+import math
 import rospy
 import threading
 import numpy as np
@@ -14,6 +16,8 @@ from yolo.tracking import Tracker
 from unimatch.stereo_trt import Depth_Estimator
 from std_msgs.msg import Header
 from sensor_msgs.msg import Image
+from tf.transformations import euler_from_quaternion
+from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion
 from utils.parser import get_config
 
 WINDOW_NAME = 'TrtYolo_deepsort'
@@ -235,6 +239,32 @@ else:
 def clamp(num, v0, v1):
     return max(v0, min(num, v1))
 
+pub_goal = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
+tf_listener = tf.TransformListener()
+
+def ros_publish_goal(x, y, local_frame='base_link', global_frame='camera_init'):
+    try:
+        (trans, rot) = tf_listener.lookupTransform(global_frame, local_frame, rospy.Time(0))
+        yaw = euler_from_quaternion(rot)[2]
+
+        global_x = trans[0] + x * math.cos(yaw) - y * math.sin(yaw)
+        global_y = trans[1] + x * math.sin(yaw) + y * math.cos(yaw)
+        global_theta = yaw + math.atan2(y, x)
+
+        goal_msg = PoseStamped()
+        goal_msg.header.frame_id = global_frame
+        goal_msg.header.stamp = rospy.Time.now()
+        goal_msg.pose.position.x = global_x
+        goal_msg.pose.position.y = global_y
+        goal_msg.pose.position.z = 0.0  # 2D 平面，z 设为 0
+        goal_msg.pose.orientation.z = math.sin(global_theta / 2.0)
+        goal_msg.pose.orientation.w = math.cos(global_theta / 2.0)
+
+        pub_goal.publish(goal_msg)
+
+    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+        rospy.logerr(f"Transform error: {e}")
+
 def loop_and_track(
     device,
     tracker: Tracker,
@@ -297,6 +327,7 @@ def loop_and_track(
         )
         if target_bbox is not None:
             target_point = depth_estimator.generate_target_point(disp, target_bbox)
+            ros_publish_goal(target_point[0], target_point[1])
             if develop:
                 canvas = np.zeros((200, 400, 3), dtype="uint8")
                 cv2.putText(canvas, f"({target_point[0]:.2f}, {target_point[1]:.2f})", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
