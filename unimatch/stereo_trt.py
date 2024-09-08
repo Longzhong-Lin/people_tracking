@@ -67,7 +67,17 @@ class Depth_Estimator():
 
         disp = disp[y1:y2, x1:x2]
         depth = (self.baseline * fx) / disp
-        depth = min(np.mean(depth), np.median(depth))
+
+        # apply Otsu's thresholding to segment the foreground object
+        normal_depth = ((depth - depth.min()) / (depth.max() - depth.min()) * 255).astype(np.uint8)
+        _, otsu_thresh = cv2.threshold(normal_depth, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        foreground_mask = (otsu_thresh == 0)
+        # cv2.imshow('foreground_mask', foreground_mask.astype(np.uint8) * 255)
+        # cv2.waitKey(1)
+
+        # calculate the depth of the foreground object
+        foreground_depth = depth[foreground_mask]
+        depth = np.mean(foreground_depth)
 
         X = (x - cx) * depth / fx
         Y = (y - cy) * depth / fy
